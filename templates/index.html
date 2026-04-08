@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="dashboard-body">
+    <div class="floating-save">
+        <button id="save-config-btn" type="button" class="btn primary floating-save-btn">保存配置</button>
+    </div>
+
+    <main class="app-shell simple-shell content">
+        <header class="surface toolbar-card control-header">
+            <div class="page-head header-top">
+                <div class="page-title">
+                    <h1>{{ app_name }}</h1>
+                    <p class="page-subtitle">顶部放基础配置，下面直接看两个渠道。</p>
+                </div>
+                <div class="header-actions">
+                    <button id="test-connection-btn" type="button" class="btn secondary">测试连接</button>
+                    <button id="scan-now-btn" type="button" class="btn secondary">立即扫描全部</button>
+                    <button id="logout-btn" type="button" class="btn ghost">退出登录</button>
+                </div>
+            </div>
+
+            <div class="field-grid compact-config-grid">
+                <label class="field compact-field span-wide">
+                    <span>目标服务地址</span>
+                    <input id="target-base-url" data-config-field="true" type="url" autocomplete="url" placeholder="http://127.0.0.1:8000">
+                </label>
+                <label class="field compact-field span-wide">
+                    <span>面板密码</span>
+                    <input id="panel-password" data-config-field="true" type="password" autocomplete="current-password" placeholder="请输入目标服务面板密码">
+                </label>
+                <label class="field compact-field">
+                    <span>轮询秒数</span>
+                    <input id="poll-interval-seconds" data-config-field="true" type="number" min="5" step="1">
+                </label>
+                <label class="field compact-field">
+                    <span>请求超时</span>
+                    <input id="request-timeout-seconds" data-config-field="true" type="number" min="1" step="0.5">
+                </label>
+                <label class="field compact-field">
+                    <span>启用数量</span>
+                    <input id="enable-batch-size" data-config-field="true" type="number" min="1" step="1">
+                </label>
+            </div>
+
+            <div class="toolbar-status">
+                <div id="scheduler-pill" class="status-chip" data-state="idle">
+                    <span>调度器</span>
+                    <strong id="scheduler-running">-</strong>
+                </div>
+                <div id="config-pill" class="status-chip" data-state="clean">
+                    <span>配置</span>
+                    <strong id="config-dirty-indicator">已同步</strong>
+                </div>
+                <div class="status-chip">
+                    <span>上次扫描</span>
+                    <strong id="last-scan-at">-</strong>
+                </div>
+                <div class="status-chip">
+                    <span>下次扫描</span>
+                    <strong id="next-scan-at">-</strong>
+                </div>
+                <div class="status-chip">
+                    <span>正常总数</span>
+                    <strong id="summary-normal-total">0</strong>
+                </div>
+                <div class="status-chip">
+                    <span>告警渠道</span>
+                    <strong id="summary-alert-channels">0</strong>
+                </div>
+                <div class="status-chip">
+                    <span>已启用渠道</span>
+                    <strong id="summary-enabled-channels">0</strong>
+                </div>
+                <div class="status-chip">
+                    <span>白名单总数</span>
+                    <strong id="summary-whitelist-total">0</strong>
+                </div>
+                <div class="status-chip">
+                    <span>已配置</span>
+                    <strong id="runtime-configured">-</strong>
+                </div>
+                <div class="status-chip">
+                    <span>扫描中</span>
+                    <strong id="runtime-in-progress">-</strong>
+                </div>
+            </div>
+
+            <div class="toolbar-feedback compact-feedback">
+                <div class="feedback-line">
+                    <span class="feedback-label">连接结果</span>
+                    <span id="connection-test-result" class="feedback-value">尚未进行连接测试。</span>
+                </div>
+                <div class="feedback-line">
+                    <span class="feedback-label">最近错误</span>
+                    <span id="runtime-last-error" class="feedback-value">-</span>
+                </div>
+            </div>
+        </header>
+
+        <section class="surface panel-card channels-panel">
+            <div class="panel-head">
+                <h2>渠道守护</h2>
+            </div>
+
+            <div class="channel-stack">
+                <article class="channel-card" data-channel-card="cli">
+                        <div class="channel-head">
+                            <div>
+                                <h3>CLI</h3>
+                                <p class="channel-mode">mode=geminicli</p>
+                            </div>
+                            <div class="channel-head-actions">
+                                <span id="channel-health-cli" class="health-pill" data-state="unknown">待检查</span>
+                                <button class="btn secondary scan-channel-btn" type="button" data-channel="cli">扫描 CLI</button>
+                            </div>
+                        </div>
+
+                        <label class="switch-field">
+                            <input id="channel-enabled-cli" data-config-field="true" type="checkbox">
+                            <span>启用自动补位</span>
+                        </label>
+
+                        <div class="stats-grid">
+                            <div class="metric-tile">
+                                <span>总数</span>
+                                <strong id="channel-total-cli">0</strong>
+                            </div>
+                            <div class="metric-tile">
+                                <span>正常</span>
+                                <strong id="channel-normal-cli">0</strong>
+                            </div>
+                            <div class="metric-tile">
+                                <span>禁用</span>
+                                <strong id="channel-disabled-cli">0</strong>
+                            </div>
+                        </div>
+
+                        <div class="channel-meta-grid">
+                            <div class="meta-item">
+                                <span>上次扫描</span>
+                                <strong id="channel-last-scan-cli">-</strong>
+                            </div>
+                            <div class="meta-item">
+                                <span>白名单剩余</span>
+                                <strong id="channel-whitelist-count-cli">0</strong>
+                            </div>
+                            <div class="meta-item span-two">
+                                <span>上次扫描结果</span>
+                                <strong id="channel-last-scan-message-cli">-</strong>
+                            </div>
+                            <div class="meta-item span-two">
+                                <span>最近动作</span>
+                                <strong id="channel-last-action-cli">-</strong>
+                            </div>
+                        </div>
+
+                        <label class="field">
+                            <span>白名单文件名</span>
+                            <textarea id="channel-whitelist-cli" data-config-field="true" rows="6" placeholder="credential-a.json&#10;credential-b.json"></textarea>
+                        </label>
+                </article>
+
+                <article class="channel-card" data-channel-card="ant">
+                        <div class="channel-head">
+                            <div>
+                                <h3>ANT</h3>
+                                <p class="channel-mode">mode=antigravity</p>
+                            </div>
+                            <div class="channel-head-actions">
+                                <span id="channel-health-ant" class="health-pill" data-state="unknown">待检查</span>
+                                <button class="btn secondary scan-channel-btn" type="button" data-channel="ant">扫描 ANT</button>
+                            </div>
+                        </div>
+
+                        <label class="switch-field">
+                            <input id="channel-enabled-ant" data-config-field="true" type="checkbox">
+                            <span>启用自动补位</span>
+                        </label>
+
+                        <div class="stats-grid">
+                            <div class="metric-tile">
+                                <span>总数</span>
+                                <strong id="channel-total-ant">0</strong>
+                            </div>
+                            <div class="metric-tile">
+                                <span>正常</span>
+                                <strong id="channel-normal-ant">0</strong>
+                            </div>
+                            <div class="metric-tile">
+                                <span>禁用</span>
+                                <strong id="channel-disabled-ant">0</strong>
+                            </div>
+                        </div>
+
+                        <div class="channel-meta-grid">
+                            <div class="meta-item">
+                                <span>上次扫描</span>
+                                <strong id="channel-last-scan-ant">-</strong>
+                            </div>
+                            <div class="meta-item">
+                                <span>白名单剩余</span>
+                                <strong id="channel-whitelist-count-ant">0</strong>
+                            </div>
+                            <div class="meta-item span-two">
+                                <span>上次扫描结果</span>
+                                <strong id="channel-last-scan-message-ant">-</strong>
+                            </div>
+                            <div class="meta-item span-two">
+                                <span>最近动作</span>
+                                <strong id="channel-last-action-ant">-</strong>
+                            </div>
+                        </div>
+
+                        <label class="field">
+                            <span>白名单文件名</span>
+                            <textarea id="channel-whitelist-ant" data-config-field="true" rows="6" placeholder="credential-a.json&#10;credential-b.json"></textarea>
+                        </label>
+                </article>
+            </div>
+        </section>
+
+        <section class="history-grid">
+            <article class="surface panel-card history-card">
+                <div class="panel-head">
+                    <h2>统一历史</h2>
+                </div>
+                <div class="table-wrap history-table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>类型</th>
+                                <th>渠道</th>
+                                <th>触发方式</th>
+                                <th>状态</th>
+                                <th>摘要</th>
+                                <th>消息</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-body"></tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <section class="surface panel-card security-card">
+            <div class="panel-head">
+                <h2>访问密码</h2>
+            </div>
+
+            <div class="field-grid three">
+                <label class="field">
+                    <span>当前访问密码</span>
+                    <input id="current-access-password" type="password" autocomplete="current-password" placeholder="请输入当前访问密码">
+                </label>
+                <label class="field">
+                    <span>新访问密码</span>
+                    <input id="new-access-password" type="password" autocomplete="new-password" placeholder="至少 8 位">
+                </label>
+                <label class="field">
+                    <span>确认新访问密码</span>
+                    <input id="confirm-access-password" type="password" autocomplete="new-password" placeholder="请再次输入新密码">
+                </label>
+            </div>
+
+            <div class="button-row">
+                <button id="change-access-password-btn" type="button" class="btn primary">修改访问密码</button>
+            </div>
+        </section>
+    </main>
+
+    <section id="flash" class="flash" aria-live="polite"></section>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

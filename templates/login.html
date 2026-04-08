@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }} - 访问验证</title>
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="auth-body">
+    <main class="auth-shell">
+        <section class="surface auth-card">
+            <div class="auth-head">
+                <h1>{{ "登录凭证守护程序" if password_configured else "设置访问密码" }}</h1>
+                <p class="auth-note">
+                    {% if password_configured %}
+                    请输入访问密码后继续。
+                    {% else %}
+                    首次使用请先设置访问密码，之后页面和内部 API 都需要登录后访问。
+                    {% endif %}
+                </p>
+            </div>
+
+            <div id="auth-message" class="auth-message">
+                {% if password_configured %}
+                尚未登录。
+                {% else %}
+                请先完成首次初始化。
+                {% endif %}
+            </div>
+
+            <form id="auth-form" class="auth-form">
+                {% if password_configured %}
+                <label class="field">
+                    <span>访问密码</span>
+                    <input id="login-password" type="password" autocomplete="current-password" placeholder="请输入访问密码">
+                </label>
+                <button id="login-btn" type="submit" class="btn primary wide">登录</button>
+                {% else %}
+                <label class="field">
+                    <span>新访问密码</span>
+                    <input id="setup-password" type="password" autocomplete="new-password" placeholder="至少 8 位">
+                </label>
+                <label class="field">
+                    <span>确认访问密码</span>
+                    <input id="setup-confirm-password" type="password" autocomplete="new-password" placeholder="请再次输入访问密码">
+                </label>
+                <button id="setup-btn" type="submit" class="btn primary wide">设置密码并进入</button>
+                {% endif %}
+            </form>
+        </section>
+    </main>
+
+    <script>
+        window.GUARDIAN_AUTH_PAGE = {
+            passwordConfigured: {{ "true" if password_configured else "false" }}
+        };
+    </script>
+    <script src="/static/login.js"></script>
+</body>
+</html>
