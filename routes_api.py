@@ -11,6 +11,8 @@ from models import (
     GuardianConfig,
     RuntimeChannelState,
     RuntimeStatusResponse,
+    WhitelistValidationChannelResult,
+    WhitelistValidationResponse,
     model_to_dict,
 )
 from security import AccessAuthService
@@ -19,6 +21,10 @@ from storage import Storage
 
 
 router = APIRouter(prefix="/api", tags=["api"])
+CHANNEL_LABELS = {
+    "cli": "CLI",
+    "ant": "ANT",
+}
 
 
 def get_storage(request: Request) -> Storage:
@@ -31,6 +37,125 @@ def get_scheduler(request: Request) -> GuardianScheduler:
 
 def get_auth_service(request: Request) -> AccessAuthService:
     return request.app.state.auth_service
+
+
+def _default_whitelist_validation_result(whitelist: list[str]) -> WhitelistValidationChannelResult:
+    if whitelist:
+        return WhitelistValidationChannelResult(
+            checked=False,
+            valid=True,
+            whitelist_count=len(whitelist),
+            message="等待校验。",
+        )
+    return WhitelistValidationChannelResult(
+        checked=False,
+        valid=True,
+        whitelist_count=0,
+        message="未填写白名单。",
+    )
+
+
+def _build_whitelist_validation_error(response: WhitelistValidationResponse) -> str:
+    parts: list[str] = []
+    for channel in CHANNELS:
+        result = response.channels[channel]
+        if not result.checked or result.valid:
+            continue
+        label = CHANNEL_LABELS.get(channel, channel)
+        filenames = "、".join(result.missing_filenames)
+        parts.append(f"{label} 缺少 {filenames}")
+
+    if not parts:
+        return "白名单校验失败。"
+    return f"白名单校验失败：{'；'.join(parts)}。请先确认这些文件已经存在于目标服务器。"
+
+
+def _channels_requiring_whitelist_validation(
+    current_config: GuardianConfig,
+    incoming_config: GuardianConfig,
+) -> list[str]:
+    connection_changed = any(
+        [
+            current_config.target_base_url != incoming_config.target_base_url,
+            current_config.panel_password != incoming_config.panel_password,
+            current_config.request_timeout_seconds != incoming_config.request_timeout_seconds,
+        ]
+    )
+    if connection_changed:
+        return [
+            channel
+            for channel in CHANNELS
+            if incoming_config.channels[channel].whitelist
+        ]
+
+    return [
+        channel
+        for channel in CHANNELS
+        if incoming_config.channels[channel].whitelist
+        and incoming_config.channels[channel].whitelist != current_config.channels[channel].whitelist
+    ]
+
+
+async def validate_config_whitelists(
+    config: GuardianConfig,
+    *,
+    channels_to_check: list[str] | None = None,
+) -> WhitelistValidationResponse:
+    normalized = config.normalized()
+    results = {
+        channel: _default_whitelist_validation_result(normalized.channels[channel].whitelist)
+        for channel in CHANNELS
+    }
+    candidate_channels = channels_to_check if channels_to_check is not None else list(CHANNELS)
+    target_channels = [
+        channel
+        for channel in candidate_channels
+        if channel in CHANNELS and normalized.channels[channel].whitelist
+    ]
+    if not target_channels:
+        return WhitelistValidationResponse(ok=True, channels=results)
+
+    if not normalized.target_base_url or not normalized.panel_password:
+        raise HTTPException(status_code=400, detail="校验白名单前，请先填写目标服务地址和面板密码。")
+
+    try:
+        async with TargetServiceClient(
+            base_url=normalized.target_base_url,
+            panel_password=normalized.panel_password,
+            timeout=normalized.request_timeout_seconds,
+        ) as client:
+            await client.login()
+            remote_filenames = {
+                channel: set(await client.list_filenames(CHANNEL_TO_MODE[channel]))
+                for channel in target_channels
+            }
+    except TargetApiError as exc:
+        raise HTTPException(status_code=502, detail=exc.message) from exc
+
+    for channel in target_channels:
+        whitelist = normalized.channels[channel].whitelist
+        missing_filenames = [
+            filename for filename in whitelist if filename not in remote_filenames.get(channel, set())
+        ]
+        if missing_filenames:
+            results[channel] = WhitelistValidationChannelResult(
+                checked=True,
+                valid=False,
+                whitelist_count=len(whitelist),
+                missing_filenames=missing_filenames,
+                message=f"以下文件在目标服务器不存在：{'、'.join(missing_filenames)}",
+            )
+            continue
+
+        results[channel] = WhitelistValidationChannelResult(
+            checked=True,
+            valid=True,
+            whitelist_count=len(whitelist),
+            message=f"已校验，通过 {len(whitelist)} 个文件。",
+        )
+
+    ok = all(result.valid for result in results.values())
+    return WhitelistValidationResponse(ok=ok, channels=results)
 
 
 def build_runtime_payload(storage: Storage, scheduler: GuardianScheduler) -> dict:
@@ -83,7 +208,18 @@ async def get_config(request: Request):
 async def save_config(request: Request, payload: GuardianConfig):
     storage = get_storage(request)
     scheduler = get_scheduler(request)
-    config = storage.save_config(payload.normalized())
+    current_config = storage.get_config()
+    normalized = payload.normalized()
+    validation_channels = _channels_requiring_whitelist_validation(current_config, normalized)
+    if validation_channels:
+        validation_response = await validate_config_whitelists(
+            normalized,
+            channels_to_check=validation_channels,
+        )
+        if not validation_response.ok:
+            raise HTTPException(status_code=400, detail=_build_whitelist_validation_error(validation_response))
+
+    config = storage.save_config(normalized)
     scheduler.notify_config_changed()
     return {
         "ok": True,
@@ -117,6 +253,12 @@ async def test_connection(payload: ConnectionTestRequest):
         "message": "连接测试成功。",
         "channels": channel_results,
     }
+
+
+@router.post("/validate-whitelists")
+async def validate_whitelists(payload: GuardianConfig):
+    response = await validate_config_whitelists(payload)
+    return model_to_dict(response)
 
 
 @router.get("/runtime-status")

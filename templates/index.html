@@ -162,7 +162,8 @@
 
                         <label class="field">
                             <span>白名单文件名</span>
-                            <textarea id="channel-whitelist-cli" data-config-field="true" rows="6" placeholder="credential-a.json&#10;credential-b.json"></textarea>
+                            <textarea id="channel-whitelist-cli" data-config-field="true" data-whitelist-field="true" rows="6" placeholder="credential-a.json&#10;credential-b.json"></textarea>
+                            <div id="channel-whitelist-validation-cli" class="field-note" data-tone="neutral">输入后会自动校验目标服务器里是否存在该文件。</div>
                         </label>
                 </article>
 
@@ -219,7 +220,8 @@
 
                         <label class="field">
                             <span>白名单文件名</span>
-                            <textarea id="channel-whitelist-ant" data-config-field="true" rows="6" placeholder="credential-a.json&#10;credential-b.json"></textarea>
+                            <textarea id="channel-whitelist-ant" data-config-field="true" data-whitelist-field="true" rows="6" placeholder="credential-a.json&#10;credential-b.json"></textarea>
+                            <div id="channel-whitelist-validation-ant" class="field-note" data-tone="neutral">输入后会自动校验目标服务器里是否存在该文件。</div>
                         </label>
                 </article>
             </div>

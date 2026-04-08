@@ -53,8 +53,42 @@ class TargetServiceClient:
         self._token = str(token)
         return self._token
 
-    async def get_status(self, mode: str) -> dict[str, Any]:
-        return await self._request("GET", "/creds/status", params={"mode": mode, "limit": 20})
+    async def get_status(self, mode: str, *, offset: int = 0, limit: int = 20) -> dict[str, Any]:
+        return await self._request("GET", "/creds/status", params={"mode": mode, "offset": offset, "limit": limit})
+
+    async def list_filenames(self, mode: str) -> list[str]:
+        filenames: list[str] = []
+        seen: set[str] = set()
+        offset = 0
+        limit = 1000
+
+        while True:
+            payload = await self.get_status(mode, offset=offset, limit=limit)
+            items = payload.get("items")
+            if not isinstance(items, list):
+                raise TargetApiError(f"目标服务返回的凭证列表格式异常：{mode}")
+
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                filename = str(item.get("filename") or "").strip()
+                if not filename or filename in seen:
+                    continue
+                seen.add(filename)
+                filenames.append(filename)
+
+            if not payload.get("has_more"):
+                break
+
+            if not items:
+                break
+
+            offset += len(items)
+            total = payload.get("total")
+            if isinstance(total, int) and offset >= total:
+                break
+
+        return filenames
 
     async def batch_enable(self, mode: str, filenames: list[str]) -> dict[str, Any]:
         return await self._request(

@@ -249,6 +249,24 @@ td,
     gap: 8px;
 }
 
+.field-note {
+    font-size: 0.84rem;
+    line-height: 1.6;
+    color: var(--muted);
+}
+
+.field-note[data-tone="success"] {
+    color: var(--success);
+}
+
+.field-note[data-tone="warning"] {
+    color: var(--warning);
+}
+
+.field-note[data-tone="error"] {
+    color: var(--danger);
+}
+
 .field.span-two {
     grid-column: span 2;
 }
@@ -296,6 +314,18 @@ textarea {
     min-height: 132px;
     resize: vertical;
     line-height: 1.6;
+}
+
+textarea[data-validation-tone="success"] {
+    border-color: rgba(22, 163, 74, 0.45);
+}
+
+textarea[data-validation-tone="warning"] {
+    border-color: rgba(217, 119, 6, 0.45);
+}
+
+textarea[data-validation-tone="error"] {
+    border-color: rgba(220, 38, 38, 0.55);
 }
 
 .channels-panel {

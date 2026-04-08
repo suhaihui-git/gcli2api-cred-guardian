@@ -4,6 +4,8 @@ const CHANNEL_META = {
     ant: { label: "ANT" },
 };
 const REFRESH_INTERVAL_MS = 15000;
+const WHITELIST_VALIDATE_DEBOUNCE_MS = 700;
+const WHITELIST_DEFAULT_MESSAGE = "输入后会自动校验目标服务器里是否存在该文件。";
 const STATUS_LABELS = {
     ok: "成功",
     warning: "警告",
@@ -22,6 +24,8 @@ const EVENT_TYPE_LABELS = {
 
 let isConfigDirty = false;
 let flashHideTimer = null;
+let whitelistValidationTimer = null;
+let whitelistValidationRequestSeq = 0;
 
 async function apiFetch(path, options = {}) {
     const response = await fetch(path, {
@@ -108,6 +112,63 @@ function whitelistFromTextarea(channel) {
         .filter(Boolean);
 }
 
+function setTextareaValidationTone(channel, tone = "neutral") {
+    const textarea = document.getElementById(`channel-whitelist-${channel}`);
+    if (!textarea) {
+        return;
+    }
+    if (!tone || tone === "neutral") {
+        delete textarea.dataset.validationTone;
+        return;
+    }
+    textarea.dataset.validationTone = tone;
+}
+
+function setWhitelistValidationMessage(channel, message, tone = "neutral") {
+    const element = document.getElementById(`channel-whitelist-validation-${channel}`);
+    if (element) {
+        element.textContent = message;
+        element.dataset.tone = tone;
+    }
+    setTextareaValidationTone(channel, tone);
+}
+
+function resetWhitelistValidationMessage(channel) {
+    const whitelist = whitelistFromTextarea(channel);
+    if (!whitelist.length) {
+        setWhitelistValidationMessage(channel, "未填写白名单。", "neutral");
+        return;
+    }
+    setWhitelistValidationMessage(channel, WHITELIST_DEFAULT_MESSAGE, "neutral");
+}
+
+function resetAllWhitelistValidationMessages() {
+    CHANNELS.forEach((channel) => {
+        resetWhitelistValidationMessage(channel);
+    });
+}
+
+function renderWhitelistValidationResult(channel, result) {
+    const whitelist = whitelistFromTextarea(channel);
+    if (!whitelist.length) {
+        resetWhitelistValidationMessage(channel);
+        return;
+    }
+    if (!result) {
+        setWhitelistValidationMessage(channel, WHITELIST_DEFAULT_MESSAGE, "neutral");
+        return;
+    }
+    if (!result.checked) {
+        setWhitelistValidationMessage(channel, result.message || WHITELIST_DEFAULT_MESSAGE, "neutral");
+        return;
+    }
+    if (result.valid) {
+        setWhitelistValidationMessage(channel, result.message || `已校验，通过 ${whitelist.length} 个文件。`, "success");
+        return;
+    }
+    setWhitelistValidationMessage(channel, result.message || "存在未通过校验的白名单文件。", "error");
+}
+
 function setElementText(id, value) {
     const element = document.getElementById(id);
     if (element) {
@@ -183,6 +244,8 @@ function applyConfig(config, options = {}) {
         document.getElementById(`channel-whitelist-${channel}`).value = (settings.whitelist || []).join("\n");
     });
 
+    whitelistValidationRequestSeq += 1;
+    resetAllWhitelistValidationMessages();
     isConfigDirty = !markClean;
     updateConfigStateIndicator();
 }
@@ -212,6 +275,78 @@ function setConnectionTestResult(message, tone = "neutral") {
     }
     element.textContent = message;
     element.dataset.tone = tone;
+}
+
+async function runWhitelistValidation(options = {}) {
+    const { silent = true } = options;
+    const payload = readConfigForm();
+    const hasWhitelist = CHANNELS.some((channel) => payload.channels[channel].whitelist.length > 0);
+    if (!hasWhitelist) {
+        resetAllWhitelistValidationMessages();
+        return null;
+    }
+
+    if (!payload.target_base_url || !payload.panel_password) {
+        CHANNELS.forEach((channel) => {
+            if (payload.channels[channel].whitelist.length) {
+                setWhitelistValidationMessage(channel, "请先填写目标服务地址和面板密码，才能校验白名单。", "warning");
+                return;
+            }
+            resetWhitelistValidationMessage(channel);
+        });
+        return null;
+    }
+
+    const requestSeq = ++whitelistValidationRequestSeq;
+    CHANNELS.forEach((channel) => {
+        if (payload.channels[channel].whitelist.length) {
+            setWhitelistValidationMessage(channel, "正在校验目标服务器中的文件名...", "neutral");
+            return;
+        }
+        resetWhitelistValidationMessage(channel);
+    });
+
+    try {
+        const result = await apiFetch("/api/validate-whitelists", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+        if (requestSeq !== whitelistValidationRequestSeq) {
+            return result;
+        }
+
+        CHANNELS.forEach((channel) => {
+            renderWhitelistValidationResult(channel, result.channels?.[channel]);
+        });
+        return result;
+    } catch (error) {
+        if (requestSeq !== whitelistValidationRequestSeq) {
+            return null;
+        }
+
+        CHANNELS.forEach((channel) => {
+            if (payload.channels[channel].whitelist.length) {
+                setWhitelistValidationMessage(channel, error.message, "error");
+                return;
+            }
+            resetWhitelistValidationMessage(channel);
+        });
+
+        if (!silent) {
+            showFlash(error.message, "error");
+        }
+        throw error;
+    }
+}
+
+function scheduleWhitelistValidation() {
+    whitelistValidationRequestSeq += 1;
+    if (whitelistValidationTimer) {
+        clearTimeout(whitelistValidationTimer);
+    }
+    whitelistValidationTimer = window.setTimeout(() => {
+        runWhitelistValidation().catch(() => {});
+    }, WHITELIST_VALIDATE_DEBOUNCE_MS);
 }
 
 function renderSchedulerState(runtime) {
@@ -394,14 +529,21 @@ async function refreshAll(options = {}) {
 }
 
 async function saveConfiguration() {
-    await apiFetch("/api/config", {
-        method: "POST",
-        body: JSON.stringify(readConfigForm()),
-    });
-    showFlash("配置已保存到本地数据库。", "success");
-    isConfigDirty = false;
-    updateConfigStateIndicator();
-    await refreshAll({ includeConfig: true });
+    try {
+        await apiFetch("/api/config", {
+            method: "POST",
+            body: JSON.stringify(readConfigForm()),
+        });
+        showFlash("配置已保存到本地数据库。", "success");
+        isConfigDirty = false;
+        updateConfigStateIndicator();
+        await refreshAll({ includeConfig: true });
+        await runWhitelistValidation().catch(() => {});
+    } catch (error) {
+        await runWhitelistValidation().catch(() => {});
+        showFlash(error.message, "error");
+        throw error;
+    }
 }
 
 async function changeAccessPassword() {
@@ -446,6 +588,7 @@ async function testConnection() {
             return `${CHANNEL_META[channel]?.label || channel}：总数 ${stats.total ?? 0}，正常 ${stats.normal ?? 0}，禁用 ${stats.disabled ?? 0}`;
         }).join("；");
         setConnectionTestResult(summary, "success");
+        await runWhitelistValidation().catch(() => {});
         showFlash("连接测试成功。", "success");
     } catch (error) {
         setConnectionTestResult(error.message, "error");
@@ -492,8 +635,15 @@ function bindAsyncButton(button, action, busyLabel) {
 
 function bindConfigFields() {
     document.querySelectorAll("[data-config-field='true']").forEach((element) => {
-        element.addEventListener("input", markConfigDirty);
-        element.addEventListener("change", markConfigDirty);
+        const shouldValidateWhitelist =
+            element.dataset.whitelistField === "true"
+            || ["target-base-url", "panel-password", "request-timeout-seconds"].includes(element.id);
+        const handler = shouldValidateWhitelist ? () => {
+            markConfigDirty();
+            scheduleWhitelistValidation();
+        } : markConfigDirty;
+        element.addEventListener("input", handler);
+        element.addEventListener("change", handler);
     });
 }
 
@@ -515,6 +665,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     bindEvents();
     updateConfigStateIndicator();
     await refreshAll({ includeConfig: true });
+    await runWhitelistValidation().catch(() => {});
     window.setInterval(async () => {
         try {
             await Promise.all([loadRuntime(), loadHistories()]);

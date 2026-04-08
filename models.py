@@ -71,6 +71,19 @@ class ConnectionTestRequest(BaseModel):
         )
 
 
+class WhitelistValidationChannelResult(BaseModel):
+    checked: bool = False
+    valid: bool = True
+    whitelist_count: int = 0
+    missing_filenames: list[str] = Field(default_factory=list)
+    message: str = ""
+
+
+class WhitelistValidationResponse(BaseModel):
+    ok: bool = True
+    channels: dict[str, WhitelistValidationChannelResult]
+
+
 class AccessPasswordLoginRequest(BaseModel):
     password: str = ""
 
