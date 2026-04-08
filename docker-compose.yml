@@ -9,6 +9,8 @@ services:
       - "18933:18933"
     volumes:
       - ./data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test:
         [

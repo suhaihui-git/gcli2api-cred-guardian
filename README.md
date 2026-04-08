@@ -15,3 +15,29 @@
 ```bash
 docker compose up -d --build
 ```
+
+一键部署 / 更新：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/suhaihui-git/gcli2api-cred-guardian/main/deploy.sh | APP_DIR=/opt/gcli2api-cred-guardian sh
+```
+
+如果已经在项目目录中，也可以直接执行：
+
+```bash
+sh deploy.sh
+```
+
+常用环境变量：
+
+```bash
+REPO_URL=https://github.com/suhaihui-git/gcli2api-cred-guardian.git
+BRANCH=main
+APP_DIR=/opt/gcli2api-cred-guardian
+```
+
+说明：
+
+- 首次执行会自动克隆仓库并启动容器
+- 再次执行会自动拉取最新代码并重建更新
+- 容器内访问宿主机上的目标 API 时，可在页面中填写 `http://host.docker.internal:端口`
