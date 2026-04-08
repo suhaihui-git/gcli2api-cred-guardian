@@ -43,13 +43,20 @@ compose() {
     exit 1
 }
 
+run_git_in_target() {
+    (
+        cd "$TARGET_DIR"
+        git "$@"
+    )
+}
+
 clone_or_update_repo() {
     if [ -d "$TARGET_DIR/.git" ]; then
         log "检测到现有仓库，开始拉取最新代码..."
-        git -C "$TARGET_DIR" remote set-url origin "$REPO_URL"
-        git -C "$TARGET_DIR" fetch origin "$BRANCH" --tags
-        git -C "$TARGET_DIR" checkout "$BRANCH"
-        git -C "$TARGET_DIR" pull --ff-only origin "$BRANCH"
+        run_git_in_target remote set-url origin "$REPO_URL"
+        run_git_in_target fetch origin "$BRANCH" --tags
+        run_git_in_target checkout "$BRANCH"
+        run_git_in_target pull --ff-only origin "$BRANCH"
         return
     fi
 
