@@ -75,7 +75,7 @@ class WhitelistValidationChannelResult(BaseModel):
     checked: bool = False
     valid: bool = True
     whitelist_count: int = 0
-    missing_filenames: list[str] = Field(default_factory=list)
+    missing_emails: list[str] = Field(default_factory=list)
     message: str = ""
 
 
@@ -107,7 +107,6 @@ class ChannelStats(BaseModel):
 
 class RuntimeChannelState(BaseModel):
     channel: str
-    mode: str
     enabled: bool
     whitelist: list[str]
     stats: ChannelStats = Field(default_factory=ChannelStats)
@@ -117,7 +116,7 @@ class RuntimeChannelState(BaseModel):
     last_action_at: str | None = None
     last_action_status: str | None = None
     last_action_message: str | None = None
-    last_action_filenames: list[str] = Field(default_factory=list)
+    last_action_emails: list[str] = Field(default_factory=list)
 
 
 class RuntimeStatusResponse(BaseModel):

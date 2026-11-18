@@ -8,13 +8,13 @@ APP_NAME = "凭证守护程序"
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "data" / "cred_guardian.sqlite3"
 
-CHANNEL_TO_MODE = {
-    "cli": "geminicli",
-    "ant": "antigravity",
-}
-CHANNELS = tuple(CHANNEL_TO_MODE.keys())
+# 目标服务当前只保留 Antigravity 凭证池。
+# 内部键继续使用 ant，便于兼容守护程序已有的 SQLite 配置。
+CHANNEL = "ant"
+CHANNEL_LABEL = "Antigravity"
+CHANNELS = (CHANNEL,)
 
-DEFAULT_TARGET_BASE_URL = "http://127.0.0.1:8000"
+DEFAULT_TARGET_BASE_URL = "http://127.0.0.1:7861"
 DEFAULT_POLL_INTERVAL_SECONDS = 60
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 10.0
 DEFAULT_ENABLE_BATCH_SIZE = 1

@@ -53,29 +53,35 @@ class TargetServiceClient:
         self._token = str(token)
         return self._token
 
-    async def get_status(self, mode: str, *, offset: int = 0, limit: int = 20) -> dict[str, Any]:
-        return await self._request("GET", "/creds/status", params={"mode": mode, "offset": offset, "limit": limit})
+    async def get_status(self, *, offset: int = 0, limit: int = 1000) -> dict[str, Any]:
+        """获取目标服务的 Antigravity 凭证状态摘要。"""
+        return await self._request(
+            "GET",
+            "/creds/status",
+            params={"offset": offset, "limit": limit, "status_filter": "all"},
+        )
 
-    async def list_filenames(self, mode: str) -> list[str]:
-        filenames: list[str] = []
+    async def list_emails(self) -> list[str]:
+        """分页读取目标服务中的凭证邮箱，供白名单校验使用。"""
+        emails: list[str] = []
         seen: set[str] = set()
         offset = 0
         limit = 1000
 
         while True:
-            payload = await self.get_status(mode, offset=offset, limit=limit)
+            payload = await self.get_status(offset=offset, limit=limit)
             items = payload.get("items")
             if not isinstance(items, list):
-                raise TargetApiError(f"目标服务返回的凭证列表格式异常：{mode}")
+                raise TargetApiError("目标服务返回的凭证列表格式异常。")
 
             for item in items:
                 if not isinstance(item, dict):
                     continue
-                filename = str(item.get("filename") or "").strip()
-                if not filename or filename in seen:
+                email = str(item.get("email") or "").strip()
+                if not email or email in seen:
                     continue
-                seen.add(filename)
-                filenames.append(filename)
+                seen.add(email)
+                emails.append(email)
 
             if not payload.get("has_more"):
                 break
@@ -88,22 +94,22 @@ class TargetServiceClient:
             if isinstance(total, int) and offset >= total:
                 break
 
-        return filenames
+        return emails
 
-    async def batch_enable(self, mode: str, filenames: list[str]) -> dict[str, Any]:
+    async def batch_enable(self, emails: list[str]) -> dict[str, Any]:
+        """批量启用指定邮箱对应的凭证。"""
         return await self._request(
             "POST",
             "/creds/batch-action",
-            params={"mode": mode},
-            json={"action": "enable", "filenames": filenames},
+            json={"action": "enable", "emails": emails},
         )
 
-    async def enable_one(self, mode: str, filename: str) -> dict[str, Any]:
+    async def enable_one(self, email: str) -> dict[str, Any]:
+        """启用指定邮箱对应的单个凭证。"""
         return await self._request(
             "POST",
             "/creds/action",
-            params={"mode": mode},
-            json={"action": "enable", "filename": filename},
+            json={"action": "enable", "email": email},
         )
 
     async def _request(self, method: str, path: str, retry_auth: bool = True, **kwargs) -> dict[str, Any]:

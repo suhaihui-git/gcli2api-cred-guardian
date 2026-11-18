@@ -1,11 +1,10 @@
-const CHANNELS = ["cli", "ant"];
+const CHANNELS = ["ant"];
 const CHANNEL_META = {
-    cli: { label: "CLI" },
-    ant: { label: "ANT" },
+    ant: { label: "Antigravity" },
 };
 const REFRESH_INTERVAL_MS = 15000;
 const WHITELIST_VALIDATE_DEBOUNCE_MS = 700;
-const WHITELIST_DEFAULT_MESSAGE = "输入后会自动校验目标服务器里是否存在该文件。";
+const WHITELIST_DEFAULT_MESSAGE = "输入后会自动校验目标服务器中是否存在这些邮箱。";
 const STATUS_LABELS = {
     ok: "成功",
     warning: "警告",
@@ -163,10 +162,10 @@ function renderWhitelistValidationResult(channel, result) {
         return;
     }
     if (result.valid) {
-        setWhitelistValidationMessage(channel, result.message || `已校验，通过 ${whitelist.length} 个文件。`, "success");
+        setWhitelistValidationMessage(channel, result.message || `已校验，通过 ${whitelist.length} 个邮箱。`, "success");
         return;
     }
-    setWhitelistValidationMessage(channel, result.message || "存在未通过校验的白名单文件。", "error");
+    setWhitelistValidationMessage(channel, result.message || "存在未通过校验的白名单邮箱。", "error");
 }
 
 function setElementText(id, value) {
@@ -300,7 +299,7 @@ async function runWhitelistValidation(options = {}) {
     const requestSeq = ++whitelistValidationRequestSeq;
     CHANNELS.forEach((channel) => {
         if (payload.channels[channel].whitelist.length) {
-            setWhitelistValidationMessage(channel, "正在校验目标服务器中的文件名...", "neutral");
+            setWhitelistValidationMessage(channel, "正在校验目标服务器中的邮箱...", "neutral");
             return;
         }
         resetWhitelistValidationMessage(channel);
@@ -467,9 +466,9 @@ function buildHistorySummary(item) {
         return `统计 ${item.total ?? 0}/${item.normal ?? 0}/${item.disabled ?? 0} | 动作 ${formatBoolean(item.action_taken)}`;
     }
 
-    const requestedCount = Array.isArray(item.requested_filenames) ? item.requested_filenames.length : 0;
-    const successCount = Number(item.success_count ?? (item.successful_filenames || []).length);
-    const failureCount = Number(item.failure_count ?? (item.failed_filenames || []).length);
+    const requestedCount = Array.isArray(item.requested_emails) ? item.requested_emails.length : 0;
+    const successCount = Number(item.success_count ?? (item.successful_emails || []).length);
+    const failureCount = Number(item.failure_count ?? (item.failed_emails || []).length);
     return `请求 ${requestedCount} | 成功 ${successCount} | 失败 ${failureCount}`;
 }
 

@@ -25,6 +25,8 @@ class Storage:
             self._conn.execute("PRAGMA synchronous=NORMAL")
             self._conn.executescript(
                 """
+                -- 历史版本的 SQLite 列名保留 filenames，以兼容已经部署的数据库；
+                -- 应用层保存的内容现在统一是邮箱标识。
                 CREATE TABLE IF NOT EXISTS app_config (
                     singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
                     target_base_url TEXT NOT NULL DEFAULT '',
@@ -226,8 +228,9 @@ class Storage:
             conn.commit()
         return normalized
 
-    def remove_whitelist_filenames(self, *, channel: str, filenames: list[str]) -> list[str]:
-        targets = {item.strip() for item in filenames if item and item.strip()}
+    def remove_whitelist_emails(self, *, channel: str, emails: list[str]) -> list[str]:
+        """从指定渠道的邮箱白名单中移除已经启用的邮箱。"""
+        targets = {item.strip() for item in emails if item and item.strip()}
         if not targets:
             return []
 
@@ -464,12 +467,13 @@ class Storage:
         trigger_type: str,
         created_at: str,
         status: str,
-        requested_filenames: list[str],
-        attempted_filenames: list[str],
-        successful_filenames: list[str],
-        failed_filenames: list[str],
+        requested_emails: list[str],
+        attempted_emails: list[str],
+        successful_emails: list[str],
+        failed_emails: list[str],
         message: str,
     ) -> None:
+        """保存一次邮箱启用动作及其结果，并更新渠道状态。"""
         with self._lock:
             conn = self._require_conn()
             conn.execute(
@@ -495,12 +499,12 @@ class Storage:
                     trigger_type,
                     created_at,
                     status,
-                    json.dumps(requested_filenames, ensure_ascii=False),
-                    json.dumps(attempted_filenames, ensure_ascii=False),
-                    json.dumps(successful_filenames, ensure_ascii=False),
-                    json.dumps(failed_filenames, ensure_ascii=False),
-                    len(successful_filenames),
-                    len(failed_filenames),
+                    json.dumps(requested_emails, ensure_ascii=False),
+                    json.dumps(attempted_emails, ensure_ascii=False),
+                    json.dumps(successful_emails, ensure_ascii=False),
+                    json.dumps(failed_emails, ensure_ascii=False),
+                    len(successful_emails),
+                    len(failed_emails),
                     message,
                 ),
             )
@@ -517,7 +521,7 @@ class Storage:
                     created_at,
                     status,
                     message,
-                    json.dumps(successful_filenames or attempted_filenames, ensure_ascii=False),
+                    json.dumps(successful_emails or attempted_emails, ensure_ascii=False),
                     channel,
                 ),
             )
@@ -559,7 +563,7 @@ class Storage:
             "last_action_at": None,
             "last_action_status": None,
             "last_action_message": None,
-            "last_action_filenames": [],
+            "last_action_emails": [],
         }
 
     def _channel_state_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
@@ -573,7 +577,7 @@ class Storage:
             "last_action_at": row["last_action_at"],
             "last_action_status": row["last_action_status"],
             "last_action_message": row["last_action_message"],
-            "last_action_filenames": self._json_loads(row["last_action_filenames_json"], []),
+            "last_action_emails": self._json_loads(row["last_action_filenames_json"], []),
         }
 
     def _history_row_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
@@ -590,10 +594,10 @@ class Storage:
             "normal": row["normal"],
             "disabled": row["disabled"],
             "action_taken": bool(row["action_taken"]),
-            "requested_filenames": self._json_loads(row["requested_filenames_json"], []),
-            "attempted_filenames": self._json_loads(row["attempted_filenames_json"], []),
-            "successful_filenames": self._json_loads(row["successful_filenames_json"], []),
-            "failed_filenames": self._json_loads(row["failed_filenames_json"], []),
+            "requested_emails": self._json_loads(row["requested_filenames_json"], []),
+            "attempted_emails": self._json_loads(row["attempted_filenames_json"], []),
+            "successful_emails": self._json_loads(row["successful_filenames_json"], []),
+            "failed_emails": self._json_loads(row["failed_filenames_json"], []),
             "success_count": row["success_count"],
             "failure_count": row["failure_count"],
             "message": row["message"],

@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from client import TargetApiError, TargetServiceClient
-from config import CHANNEL_TO_MODE, CHANNELS, MAX_HISTORY_LIMIT
+from config import CHANNEL_LABEL, CHANNELS, MAX_HISTORY_LIMIT
 from models import (
     AccessPasswordChangeRequest,
     ConnectionTestRequest,
@@ -21,10 +21,6 @@ from storage import Storage
 
 
 router = APIRouter(prefix="/api", tags=["api"])
-CHANNEL_LABELS = {
-    "cli": "CLI",
-    "ant": "ANT",
-}
 
 
 def get_storage(request: Request) -> Storage:
@@ -61,13 +57,13 @@ def _build_whitelist_validation_error(response: WhitelistValidationResponse) -> 
         result = response.channels[channel]
         if not result.checked or result.valid:
             continue
-        label = CHANNEL_LABELS.get(channel, channel)
-        filenames = "、".join(result.missing_filenames)
-        parts.append(f"{label} 缺少 {filenames}")
+        label = CHANNEL_LABEL
+        emails = "、".join(result.missing_emails)
+        parts.append(f"{label} 缺少 {emails}")
 
     if not parts:
         return "白名单校验失败。"
-    return f"白名单校验失败：{'；'.join(parts)}。请先确认这些文件已经存在于目标服务器。"
+    return f"白名单校验失败：{'；'.join(parts)}。请先确认这些邮箱已经存在于目标服务器。"
 
 
 def _channels_requiring_whitelist_validation(
@@ -125,25 +121,20 @@ async def validate_config_whitelists(
             timeout=normalized.request_timeout_seconds,
         ) as client:
             await client.login()
-            remote_filenames = {
-                channel: set(await client.list_filenames(CHANNEL_TO_MODE[channel]))
-                for channel in target_channels
-            }
+            remote_emails = set(await client.list_emails())
     except TargetApiError as exc:
         raise HTTPException(status_code=502, detail=exc.message) from exc
 
     for channel in target_channels:
         whitelist = normalized.channels[channel].whitelist
-        missing_filenames = [
-            filename for filename in whitelist if filename not in remote_filenames.get(channel, set())
-        ]
-        if missing_filenames:
+        missing_emails = [email for email in whitelist if email not in remote_emails]
+        if missing_emails:
             results[channel] = WhitelistValidationChannelResult(
                 checked=True,
                 valid=False,
                 whitelist_count=len(whitelist),
-                missing_filenames=missing_filenames,
-                message=f"以下文件在目标服务器不存在：{'、'.join(missing_filenames)}",
+                missing_emails=missing_emails,
+                message=f"以下邮箱在目标服务器不存在：{'、'.join(missing_emails)}",
             )
             continue
 
@@ -151,7 +142,7 @@ async def validate_config_whitelists(
             checked=True,
             valid=True,
             whitelist_count=len(whitelist),
-            message=f"已校验，通过 {len(whitelist)} 个文件。",
+            message=f"已校验，通过 {len(whitelist)} 个邮箱。",
         )
 
     ok = all(result.valid for result in results.values())
@@ -168,7 +159,6 @@ def build_runtime_payload(storage: Storage, scheduler: GuardianScheduler) -> dic
         state = channel_states[channel]
         model = RuntimeChannelState(
             channel=channel,
-            mode=CHANNEL_TO_MODE[channel],
             enabled=settings.enabled,
             whitelist=settings.whitelist,
             stats={
@@ -182,7 +172,7 @@ def build_runtime_payload(storage: Storage, scheduler: GuardianScheduler) -> dic
             last_action_at=state["last_action_at"],
             last_action_status=state["last_action_status"],
             last_action_message=state["last_action_message"],
-            last_action_filenames=state["last_action_filenames"],
+            last_action_emails=state["last_action_emails"],
         )
         channels[channel] = model
     payload = RuntimeStatusResponse(
@@ -241,10 +231,9 @@ async def test_connection(payload: ConnectionTestRequest):
             timeout=normalized.request_timeout_seconds,
         ) as client:
             await client.login()
-            channel_results = {}
-            for channel, mode in CHANNEL_TO_MODE.items():
-                status = await client.get_status(mode)
-                channel_results[channel] = status.get("stats") or {"total": 0, "normal": 0, "disabled": 0}
+            status = await client.get_status()
+            stats = status.get("stats") or {"total": 0, "normal": 0, "disabled": 0}
+            channel_results = {channel: stats for channel in CHANNELS}
     except TargetApiError as exc:
         raise HTTPException(status_code=502, detail=exc.message) from exc
 

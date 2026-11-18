@@ -6,7 +6,7 @@ from typing import Any
 
 from client import TargetApiError, TargetServiceClient
 from config import (
-    CHANNEL_TO_MODE,
+    CHANNEL_LABEL,
     CHANNELS,
     MIN_POLL_INTERVAL_SECONDS,
     iso_after_seconds,
@@ -19,7 +19,6 @@ from storage import Storage
 @dataclass
 class ScanResult:
     channel: str
-    mode: str
     status: str
     message: str
     total: int = 0
@@ -28,9 +27,9 @@ class ScanResult:
     action_taken: bool = False
     action_status: str | None = None
     action_message: str | None = None
-    attempted_filenames: list[str] | None = None
-    successful_filenames: list[str] | None = None
-    failed_filenames: list[str] | None = None
+    attempted_emails: list[str] | None = None
+    successful_emails: list[str] | None = None
+    failed_emails: list[str] | None = None
 
 
 class GuardianScheduler:
@@ -179,11 +178,10 @@ class GuardianScheduler:
         trigger_type: str,
     ) -> ScanResult:
         started_at = utc_now().isoformat()
-        mode = CHANNEL_TO_MODE[channel]
         channel_settings = config.channels[channel]
 
         try:
-            status_payload = await client.get_status(mode)
+            status_payload = await client.get_status()
         except TargetApiError as exc:
             finished_at = utc_now().isoformat()
             self.storage.record_scan(
@@ -199,7 +197,7 @@ class GuardianScheduler:
                 message=exc.message,
                 error_detail=exc.message,
             )
-            return ScanResult(channel=channel, mode=mode, status="error", message=exc.message)
+            return ScanResult(channel=channel, status="error", message=exc.message)
 
         stats = status_payload.get("stats") or {}
         total = int(stats.get("total", 0) or 0)
@@ -208,7 +206,7 @@ class GuardianScheduler:
 
         if normal > 0:
             finished_at = utc_now().isoformat()
-            message = f"{channel} 渠道当前有 {normal} 个正常凭证，无需处理。"
+            message = f"{CHANNEL_LABEL} 渠道当前有 {normal} 个正常凭证，无需处理。"
             self.storage.record_scan(
                 channel=channel,
                 trigger_type=trigger_type,
@@ -223,7 +221,6 @@ class GuardianScheduler:
             )
             return ScanResult(
                 channel=channel,
-                mode=mode,
                 status="ok",
                 message=message,
                 total=total,
@@ -233,7 +230,7 @@ class GuardianScheduler:
 
         if not channel_settings.enabled:
             finished_at = utc_now().isoformat()
-            message = f"{channel} 渠道正常凭证为 0，但自动启用开关已关闭。"
+            message = f"{CHANNEL_LABEL} 渠道正常凭证为 0，但自动启用开关已关闭。"
             self.storage.record_scan(
                 channel=channel,
                 trigger_type=trigger_type,
@@ -248,7 +245,6 @@ class GuardianScheduler:
             )
             return ScanResult(
                 channel=channel,
-                mode=mode,
                 status="warning",
                 message=message,
                 total=total,
@@ -259,7 +255,7 @@ class GuardianScheduler:
         whitelist = channel_settings.whitelist
         if not whitelist:
             finished_at = utc_now().isoformat()
-            message = f"{channel} 渠道正常凭证为 0，且白名单为空。"
+            message = f"{CHANNEL_LABEL} 渠道正常凭证为 0，且白名单为空。"
             self.storage.record_scan(
                 channel=channel,
                 trigger_type=trigger_type,
@@ -274,7 +270,6 @@ class GuardianScheduler:
             )
             return ScanResult(
                 channel=channel,
-                mode=mode,
                 status="warning",
                 message=message,
                 total=total,
@@ -286,7 +281,6 @@ class GuardianScheduler:
         action_result = await self._attempt_enable(
             client=client,
             channel=channel,
-            mode=mode,
             trigger_type=trigger_type,
             config=config,
             requested=requested,
@@ -294,7 +288,7 @@ class GuardianScheduler:
 
         refresh_error: str | None = None
         try:
-            refreshed_status = await client.get_status(mode)
+            refreshed_status = await client.get_status()
             refreshed_stats = refreshed_status.get("stats") or {}
             total = int(refreshed_stats.get("total", total) or total)
             normal = int(refreshed_stats.get("normal", normal) or normal)
@@ -324,7 +318,6 @@ class GuardianScheduler:
         )
         return ScanResult(
             channel=channel,
-            mode=mode,
             status=action_result["status"],
             message=message,
             total=total,
@@ -333,9 +326,9 @@ class GuardianScheduler:
             action_taken=True,
             action_status=action_result["status"],
             action_message=action_result["message"],
-            attempted_filenames=action_result["attempted_filenames"],
-            successful_filenames=action_result["successful_filenames"],
-            failed_filenames=action_result["failed_filenames"],
+            attempted_emails=action_result["attempted_emails"],
+            successful_emails=action_result["successful_emails"],
+            failed_emails=action_result["failed_emails"],
         )
 
     async def _attempt_enable(
@@ -343,7 +336,6 @@ class GuardianScheduler:
         *,
         client: TargetServiceClient,
         channel: str,
-        mode: str,
         trigger_type: str,
         config: GuardianConfig,
         requested: list[str],
@@ -357,7 +349,7 @@ class GuardianScheduler:
         pending_retry: list[str] = []
 
         try:
-            batch_response = await client.batch_enable(mode, requested)
+            batch_response = await client.batch_enable(requested)
             attempted = list(requested)
             batch_success = int(batch_response.get("success_count", 0) or 0)
             batch_errors = batch_response.get("errors") or []
@@ -367,10 +359,10 @@ class GuardianScheduler:
             else:
                 fallback_used = True
                 if batch_failed_map:
-                    matched_failures = [filename for filename in requested if filename in batch_failed_map]
+                    matched_failures = [email for email in requested if email in batch_failed_map]
                     if matched_failures:
                         pending_retry = matched_failures
-                        successful = [filename for filename in requested if filename not in batch_failed_map]
+                        successful = [email for email in requested if email not in batch_failed_map]
                     else:
                         pending_retry = list(requested)
                     failure_details.extend(batch_failed_map.values())
@@ -386,13 +378,13 @@ class GuardianScheduler:
             retried_failed: list[str] = []
             retry_targets = pending_retry or list(requested)
             attempted = list(dict.fromkeys((attempted or []) + retry_targets))
-            for filename in retry_targets:
+            for email in retry_targets:
                 try:
-                    await client.enable_one(mode, filename)
-                    retried_successful.append(filename)
+                    await client.enable_one(email)
+                    retried_successful.append(email)
                 except TargetApiError as exc:
-                    retried_failed.append(filename)
-                    failure_details.append(f"{filename}: {exc.message}")
+                    retried_failed.append(email)
+                    failure_details.append(f"{email}: {exc.message}")
 
             successful = list(dict.fromkeys(successful + retried_successful))
             failed = list(dict.fromkeys(retried_failed))
@@ -404,30 +396,30 @@ class GuardianScheduler:
             status = "error"
 
         if successful and not failed:
-            message = f"已为 {channel} 渠道自动启用 {len(successful)}/{len(requested)} 个凭证。"
+            message = f"已为 {CHANNEL_LABEL} 渠道自动启用 {len(successful)}/{len(requested)} 个凭证。"
         elif successful and failed:
-            message = f"已为 {channel} 渠道自动启用 {len(successful)}/{len(requested)} 个凭证，部分文件失败。"
+            message = f"已为 {CHANNEL_LABEL} 渠道自动启用 {len(successful)}/{len(requested)} 个凭证，部分邮箱失败。"
         else:
-            message = f"未能为 {channel} 渠道自动启用任何凭证。"
+            message = f"未能为 {CHANNEL_LABEL} 渠道自动启用任何凭证。"
 
         if fallback_used:
             message = f"{message} 已降级为逐个启用。"
         if batch_exception:
             message = f"{message} 批量启用错误：{batch_exception}"
         if failed:
-            message = f"{message} 失败文件：{', '.join(failed)}"
+            message = f"{message} 失败邮箱：{', '.join(failed)}"
         if failure_details:
             detail_summary = "; ".join(dict.fromkeys(failure_details))
             message = f"{message} 详情：{detail_summary}"
 
         removed_from_whitelist: list[str] = []
         if successful:
-            removed_from_whitelist = self.storage.remove_whitelist_filenames(
+            removed_from_whitelist = self.storage.remove_whitelist_emails(
                 channel=channel,
-                filenames=successful,
+                emails=successful,
             )
             if removed_from_whitelist:
-                message = f"{message} 已自动从白名单移除 {len(removed_from_whitelist)} 个已启用文件。"
+                message = f"{message} 已自动从白名单移除 {len(removed_from_whitelist)} 个已启用邮箱。"
 
         created_at = utc_now().isoformat()
         self.storage.record_action(
@@ -435,18 +427,18 @@ class GuardianScheduler:
             trigger_type=trigger_type,
             created_at=created_at,
             status=status,
-            requested_filenames=requested,
-            attempted_filenames=attempted or list(requested),
-            successful_filenames=successful,
-            failed_filenames=failed,
+            requested_emails=requested,
+            attempted_emails=attempted or list(requested),
+            successful_emails=successful,
+            failed_emails=failed,
             message=message,
         )
         return {
             "status": status,
             "message": message,
-            "attempted_filenames": attempted or list(requested),
-            "successful_filenames": successful,
-            "failed_filenames": failed,
+            "attempted_emails": attempted or list(requested),
+            "successful_emails": successful,
+            "failed_emails": failed,
         }
 
     @staticmethod
@@ -456,9 +448,9 @@ class GuardianScheduler:
             text = str(raw_item).strip()
             if not text:
                 continue
-            filename, separator, detail = text.partition(":")
-            if separator and filename.strip():
-                failed_map[filename.strip()] = text
+            identifier, separator, _ = text.partition(":")
+            if separator and identifier.strip():
+                failed_map[identifier.strip()] = text
             else:
                 failed_map[text] = text
         return failed_map
@@ -467,7 +459,6 @@ class GuardianScheduler:
     def _scan_result_to_dict(result: ScanResult) -> dict[str, Any]:
         return {
             "channel": result.channel,
-            "mode": result.mode,
             "status": result.status,
             "message": result.message,
             "total": result.total,
@@ -476,7 +467,7 @@ class GuardianScheduler:
             "action_taken": result.action_taken,
             "action_status": result.action_status,
             "action_message": result.action_message,
-            "attempted_filenames": result.attempted_filenames or [],
-            "successful_filenames": result.successful_filenames or [],
-            "failed_filenames": result.failed_filenames or [],
+            "attempted_emails": result.attempted_emails or [],
+            "successful_emails": result.successful_emails or [],
+            "failed_emails": result.failed_emails or [],
         }

@@ -94,7 +94,6 @@ button {
 }
 
 .page-subtitle,
-.channel-mode,
 .feedback-label,
 .field span,
 .meta-item span,
@@ -105,7 +104,6 @@ td,
 }
 
 .page-subtitle,
-.channel-mode,
 .auth-note {
     margin: 6px 0 0;
 }
