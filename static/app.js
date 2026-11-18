@@ -104,9 +104,11 @@ function statusTone(status) {
 }
 
 function whitelistFromTextarea(channel) {
-    return document
-        .getElementById(`channel-whitelist-${channel}`)
-        .value.split(/\r?\n/)
+    const textarea = document.getElementById(`channel-whitelist-${channel}`);
+    if (!textarea) {
+        return [];
+    }
+    return textarea.value.split(/\r?\n/)
         .map((item) => item.trim())
         .filter(Boolean);
 }
@@ -176,6 +178,9 @@ function setElementText(id, value) {
 }
 
 function readConfigForm() {
+    const enabledElements = Object.fromEntries(
+        CHANNELS.map((channel) => [channel, document.getElementById(`channel-enabled-${channel}`)]),
+    );
     return {
         target_base_url: document.getElementById("target-base-url").value.trim(),
         panel_password: document.getElementById("panel-password").value,
@@ -186,7 +191,7 @@ function readConfigForm() {
             CHANNELS.map((channel) => [
                 channel,
                 {
-                    enabled: document.getElementById(`channel-enabled-${channel}`).checked,
+                    enabled: Boolean(enabledElements[channel]?.checked),
                     whitelist: whitelistFromTextarea(channel),
                 },
             ]),
@@ -239,8 +244,14 @@ function applyConfig(config, options = {}) {
 
     CHANNELS.forEach((channel) => {
         const settings = config.channels?.[channel] || { enabled: true, whitelist: [] };
-        document.getElementById(`channel-enabled-${channel}`).checked = Boolean(settings.enabled);
-        document.getElementById(`channel-whitelist-${channel}`).value = (settings.whitelist || []).join("\n");
+        const enabledElement = document.getElementById(`channel-enabled-${channel}`);
+        const whitelistElement = document.getElementById(`channel-whitelist-${channel}`);
+        if (enabledElement) {
+            enabledElement.checked = Boolean(settings.enabled);
+        }
+        if (whitelistElement) {
+            whitelistElement.value = (settings.whitelist || []).join("\n");
+        }
     });
 
     whitelistValidationRequestSeq += 1;
