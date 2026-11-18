@@ -34,7 +34,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
     font: inherit;
 }
 
@@ -225,6 +226,30 @@ td,
     margin-bottom: 16px;
 }
 
+.history-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.history-filter {
+    display: grid;
+    gap: 6px;
+    min-width: 150px;
+}
+
+.history-filter span {
+    color: var(--muted);
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.history-filter select {
+    min-width: 150px;
+    padding: 9px 12px;
+}
+
 .field-grid {
     gap: 14px;
 }
@@ -291,7 +316,8 @@ td,
 }
 
 input,
-textarea {
+textarea,
+select {
     width: 100%;
     border: 1px solid #d1d5db;
     border-radius: var(--radius-md);
@@ -302,7 +328,8 @@ textarea {
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
     outline: none;
     border-color: rgba(10, 132, 255, 0.55);
     box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.12);
@@ -332,15 +359,34 @@ textarea[data-validation-tone="error"] {
 
 .channel-stack {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
 }
 
 .channel-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+    gap: 16px;
     border: 1px solid var(--line);
     border-radius: var(--radius-lg);
     background: var(--panel-soft);
     padding: 16px;
+}
+
+.channel-card > .channel-head,
+.channel-card > .switch-field {
+    grid-column: 1 / -1;
+}
+
+.channel-card > .stats-grid,
+.channel-card > .channel-meta-grid {
+    grid-column: 1;
+}
+
+.channel-card > .field {
+    grid-column: 2;
+    grid-row: 3 / span 2;
+    align-self: stretch;
 }
 
 .channel-head {
@@ -543,6 +589,12 @@ td.message-cell {
     border-color: var(--line);
 }
 
+.btn.danger {
+    background: #fff;
+    color: var(--danger);
+    border-color: rgba(220, 38, 38, 0.28);
+}
+
 .btn.wide {
     width: 100%;
 }
@@ -617,6 +669,17 @@ td.message-cell {
     .compact-config-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .channel-card {
+        grid-template-columns: 1fr;
+    }
+
+    .channel-card > .stats-grid,
+    .channel-card > .channel-meta-grid,
+    .channel-card > .field {
+        grid-column: auto;
+        grid-row: auto;
+    }
 }
 
 @media (max-width: 760px) {
@@ -634,6 +697,17 @@ td.message-cell {
     .header-top {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .history-actions {
+        width: 100%;
+        align-items: stretch;
+    }
+
+    .history-filter,
+    .history-filter select,
+    .history-actions .btn {
+        width: 100%;
     }
 
     .toolbar-status {

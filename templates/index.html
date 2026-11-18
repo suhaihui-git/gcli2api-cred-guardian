@@ -172,6 +172,17 @@
             <article class="surface panel-card history-card">
                 <div class="panel-head">
                     <h2>统一历史</h2>
+                    <div class="history-actions">
+                        <label class="history-filter">
+                            <span>动作筛选</span>
+                            <select id="history-action-filter">
+                                <option value="all">全部记录</option>
+                                <option value="yes">有动作</option>
+                                <option value="no">无动作</option>
+                            </select>
+                        </label>
+                        <button id="clear-history-btn" type="button" class="btn danger">清空日志</button>
+                    </div>
                 </div>
                 <div class="table-wrap history-table-wrap">
                     <table>

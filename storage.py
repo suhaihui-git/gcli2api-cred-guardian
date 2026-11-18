@@ -527,17 +527,28 @@ class Storage:
             )
             conn.commit()
 
-    def list_history(self, limit: int = 100) -> list[dict[str, Any]]:
-        rows = self._fetchall(
-            """
-            SELECT *
-            FROM history_entries
-            ORDER BY occurred_at DESC, id DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
+    def list_history(self, limit: int = 100, action_filter: str = "all") -> list[dict[str, Any]]:
+        """按动作状态读取历史记录，返回最新的记录。"""
+        query = "SELECT * FROM history_entries"
+        params: list[Any] = []
+        if action_filter == "yes":
+            query += " WHERE (action_taken = 1 OR event_type = 'action')"
+        elif action_filter == "no":
+            query += " WHERE (action_taken = 0 AND event_type != 'action')"
+        query += " ORDER BY occurred_at DESC, id DESC LIMIT ?"
+        params.append(limit)
+        rows = self._fetchall(query, tuple(params))
         return [self._history_row_to_dict(row) for row in rows]
+
+    def clear_history(self) -> int:
+        """清空全部历史记录并返回删除的记录数。"""
+        with self._lock:
+            conn = self._require_conn()
+            count_row = conn.execute("SELECT COUNT(*) AS count FROM history_entries").fetchone()
+            deleted_count = int(count_row["count"] if count_row else 0)
+            conn.execute("DELETE FROM history_entries")
+            conn.commit()
+            return deleted_count
 
     def _require_conn(self) -> sqlite3.Connection:
         if self._conn is None:

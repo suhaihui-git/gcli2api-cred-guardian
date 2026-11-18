@@ -299,9 +299,22 @@ async def change_access_password(request: Request, payload: AccessPasswordChange
 
 
 @router.get("/history")
-async def history(request: Request, limit: int = 50):
+async def history(request: Request, limit: int = 50, action_filter: str = "all"):
+    if action_filter not in {"all", "yes", "no"}:
+        raise HTTPException(status_code=400, detail="动作筛选只支持 all、yes 或 no。")
     storage = get_storage(request)
     effective_limit = max(1, min(limit, MAX_HISTORY_LIMIT))
     return {
-        "items": storage.list_history(effective_limit),
+        "items": storage.list_history(effective_limit, action_filter=action_filter),
+    }
+
+
+@router.post("/history/clear")
+async def clear_history(request: Request):
+    """清空守护程序保存的历史扫描和动作记录。"""
+    deleted_count = get_storage(request).clear_history()
+    return {
+        "ok": True,
+        "deleted_count": deleted_count,
+        "message": f"已清空 {deleted_count} 条历史记录。",
     }

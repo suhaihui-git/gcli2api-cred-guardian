@@ -25,6 +25,7 @@ let isConfigDirty = false;
 let flashHideTimer = null;
 let whitelistValidationTimer = null;
 let whitelistValidationRequestSeq = 0;
+let historyActionFilter = "all";
 
 async function apiFetch(path, options = {}) {
     const response = await fetch(path, {
@@ -521,8 +522,29 @@ async function loadRuntime() {
 }
 
 async function loadHistories() {
-    const history = await apiFetch("/api/history?limit=60");
+    const query = new URLSearchParams({
+        limit: "200",
+        action_filter: historyActionFilter,
+    });
+    const history = await apiFetch(`/api/history?${query.toString()}`);
     renderHistory(history.items || []);
+}
+
+async function clearHistory() {
+    if (!window.confirm("确定清空全部历史日志吗？此操作不可恢复。")) {
+        return;
+    }
+    try {
+        const result = await apiFetch("/api/history/clear", {
+            method: "POST",
+            body: JSON.stringify({}),
+        });
+        showFlash(result.message || "历史日志已清空。", "success");
+        await loadHistories();
+    } catch (error) {
+        showFlash(error.message, "error");
+        throw error;
+    }
 }
 
 async function refreshAll(options = {}) {
@@ -665,6 +687,19 @@ function bindEvents() {
     bindAsyncButton(document.getElementById("scan-now-btn"), () => triggerScan(), "正在扫描...");
     bindAsyncButton(document.getElementById("change-access-password-btn"), changeAccessPassword, "正在修改...");
     bindAsyncButton(document.getElementById("logout-btn"), logout, "退出中...");
+    bindAsyncButton(document.getElementById("clear-history-btn"), clearHistory, "正在清空...");
+
+    const historyFilter = document.getElementById("history-action-filter");
+    if (historyFilter) {
+        historyFilter.addEventListener("change", async () => {
+            historyActionFilter = historyFilter.value;
+            try {
+                await loadHistories();
+            } catch (error) {
+                showFlash(error.message, "error");
+            }
+        });
+    }
 
     document.querySelectorAll(".scan-channel-btn").forEach((button) => {
         bindAsyncButton(button, () => triggerScan(button.dataset.channel), "扫描中...");
